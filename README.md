@@ -53,9 +53,13 @@ This will start:
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/api
 
-5. **Create a superuser** (in a new terminal):
+5. **Create a superuser with account** (in a new terminal):
 ```bash
-docker-compose exec backend python manage.py createsuperuser
+# Using default credentials (username: admin, password: admin123)
+docker-compose exec backend python manage.py seed_superuser
+
+# Or with custom credentials
+docker-compose exec backend python manage.py seed_superuser --username admin --email admin@example.com --password yourpassword
 ```
 
 6. **Stop all services**:
@@ -73,6 +77,7 @@ docker-compose down -v
 - **View logs**: `docker-compose logs -f [service_name]`
 - **Rebuild a service**: `docker-compose up --build [service_name]`
 - **Run migrations**: `docker-compose exec backend python manage.py migrate`
+- **Create superuser with account**: `docker-compose exec backend python manage.py seed_superuser`
 - **Access backend shell**: `docker-compose exec backend python manage.py shell`
 - **Access database**: `docker-compose exec db psql -U nissmart_user -d nissmart`
 
@@ -123,7 +128,16 @@ cp .env.example .env
 python manage.py migrate
 ```
 
-6. Create a superuser (optional, for Django admin):
+6. Create a superuser with account (recommended):
+```bash
+# Using default credentials (username: admin, password: admin123)
+python manage.py seed_superuser
+
+# Or with custom credentials
+python manage.py seed_superuser --username admin --email admin@example.com --password yourpassword
+```
+
+Alternatively, create a superuser without account (legacy):
 ```bash
 python manage.py createsuperuser
 ```

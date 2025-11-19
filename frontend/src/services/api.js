@@ -52,6 +52,17 @@ export const getUsers = async () => {
   }
 };
 
+// Register a new user (for creating users during transfers)
+export const registerUser = async (userData) => {
+  try {
+    const response = await api.post('/auth/register/', userData);
+    return response.data;
+  } catch (error) {
+    console.error('Error registering user:', error);
+    throw error;
+  }
+};
+
 // Account APIs
 export const getBalance = async (userId) => {
   try {

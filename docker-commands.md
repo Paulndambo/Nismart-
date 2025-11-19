@@ -42,9 +42,10 @@ docker-compose logs -f redis
 docker-compose exec backend python manage.py migrate
 ```
 
-### Create Superuser
+### Create Superuser with Account
 ```bash
-docker-compose exec backend python manage.py createsuperuser
+# Using default credentials (username: admin, password: admin123)
+docker-compose exec backend python manage.py seed_superuser
 ```
 
 ### Access Database Shell
@@ -121,4 +122,3 @@ docker image prune
 # Full cleanup (careful!)
 docker system prune -a
 ```
-

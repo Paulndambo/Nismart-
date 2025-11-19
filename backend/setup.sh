@@ -31,4 +31,3 @@ python manage.py migrate
 
 echo "Setup complete!"
 echo "To start the server, run: python manage.py runserver"
-

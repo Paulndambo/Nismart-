@@ -7,6 +7,7 @@ import {
   transfer,
   withdraw,
   getTransactionHistory,
+  registerUser,
 } from '../services/api';
 import Sidebar from './Sidebar';
 import {
@@ -38,11 +39,19 @@ const UserDashboard = () => {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
 
   // Form states
   const [depositAmount, setDepositAmount] = useState('');
   const [transferData, setTransferData] = useState({ destination_user_id: '', amount: '' });
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [newUserData, setNewUserData] = useState({
+    email: '',
+    first_name: '',
+    last_name: '',
+    phone_number: '',
+  });
 
   useEffect(() => {
     if (user) {
@@ -110,6 +119,68 @@ const UserDashboard = () => {
     }
   };
 
+  const handleCreateUser = async (e, isFromTransfer = false) => {
+    e.preventDefault();
+    if (!newUserData.email || !newUserData.first_name || !newUserData.last_name) {
+      showMessage('Please fill in all required fields', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Auto-generate username from email (part before @)
+      const username = newUserData.email.split('@')[0] + '_' + Date.now().toString().slice(-6);
+      // Auto-generate a default password (8 characters minimum)
+      const defaultPassword = 'TempPass123!';
+      
+      const userData = {
+        username,
+        email: newUserData.email,
+        password: defaultPassword,
+        password2: defaultPassword,
+        first_name: newUserData.first_name,
+        last_name: newUserData.last_name,
+        phone_number: newUserData.phone_number || '',
+      };
+
+      const response = await registerUser(userData);
+      const newUser = response.user;
+
+      // Reload users list
+      await loadUsers();
+
+      if (isFromTransfer) {
+        // Automatically select the newly created user for transfer
+        setTransferData({
+          ...transferData,
+          destination_user_id: newUser.id.toString(),
+        });
+        setShowCreateUserForm(false);
+        showMessage(`User ${newUser.email} created successfully! You can now proceed with the transfer.`);
+      } else {
+        // Reset form and hide add user modal
+        setNewUserData({
+          email: '',
+          first_name: '',
+          last_name: '',
+          phone_number: '',
+        });
+        setShowAddUserModal(false);
+        showMessage(`User ${newUser.email} created successfully!`);
+      }
+    } catch (error) {
+      const errorMsg = error.response?.data;
+      if (typeof errorMsg === 'object') {
+        const errorMessages = Object.values(errorMsg).flat();
+        showMessage(errorMessages.join(', ') || 'Failed to create user', 'error');
+      } else {
+        showMessage(errorMsg || 'Failed to create user', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTransfer = async (e) => {
     e.preventDefault();
     if (!transferData.destination_user_id || !transferData.amount) return;
@@ -135,6 +206,7 @@ const UserDashboard = () => {
       await transfer(sourceAccountId, destAccountId, transferData.amount);
       setTransferData({ destination_user_id: '', amount: '' });
       setShowTransferModal(false);
+      setShowCreateUserForm(false);
       await loadUserData();
       showMessage('Transfer successful!');
     } catch (error) {
@@ -323,6 +395,13 @@ const UserDashboard = () => {
               <span className="action-icon">💸</span>
               <span className="action-label">Withdraw</span>
             </button>
+            <button
+              className="action-btn action-add-user"
+              onClick={() => setShowAddUserModal(true)}
+            >
+              <span className="action-icon">👤</span>
+              <span className="action-label">Add User</span>
+            </button>
           </div>
         </div>
 
@@ -488,66 +567,165 @@ const UserDashboard = () => {
       )}
 
       {showTransferModal && (
-        <div className="modal-overlay" onClick={() => setShowTransferModal(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setShowTransferModal(false);
+          setShowCreateUserForm(false);
+          setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+        }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Transfer Funds</h3>
               <button
                 className="modal-close"
-                onClick={() => setShowTransferModal(false)}
+                onClick={() => {
+                  setShowTransferModal(false);
+                  setShowCreateUserForm(false);
+                  setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+                }}
               >
                 ✕
               </button>
             </div>
-            <form onSubmit={handleTransfer}>
-              <div className="form-group">
-                <label>To User</label>
-                <select
-                  value={transferData.destination_user_id}
-                  onChange={(e) =>
-                    setTransferData({
-                      ...transferData,
-                      destination_user_id: e.target.value,
-                    })
-                  }
-                  required
-                >
-                  <option value="">Select user...</option>
-                  {(Array.isArray(users) ? users : []).map((user) => (
-                    user && (
-                      <option key={user.id} value={user.id}>
-                        {user.first_name} {user.last_name} ({user.email})
-                      </option>
-                    )
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={transferData.amount}
-                  onChange={(e) =>
-                    setTransferData({ ...transferData, amount: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowTransferModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Processing...' : 'Transfer'}
-                </button>
-              </div>
-            </form>
+
+            {!showCreateUserForm ? (
+              <form onSubmit={handleTransfer}>
+                <div className="form-group">
+                  <label>To User</label>
+                  <select
+                    value={transferData.destination_user_id}
+                    onChange={(e) =>
+                      setTransferData({
+                        ...transferData,
+                        destination_user_id: e.target.value,
+                      })
+                    }
+                    required
+                  >
+                    <option value="">Select user...</option>
+                    {(Array.isArray(users) ? users : []).map((user) => (
+                      user && (
+                        <option key={user.id} value={user.id}>
+                          {user.first_name} {user.last_name} ({user.email})
+                        </option>
+                      )
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ margin: 0 }}>Can't find the user?</label>
+                    <button
+                      type="button"
+                      className="btn btn-link"
+                      onClick={() => setShowCreateUserForm(true)}
+                      style={{ padding: '4px 8px', fontSize: '14px', textDecoration: 'underline' }}
+                    >
+                      Create New User
+                    </button>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={transferData.amount}
+                    onChange={(e) =>
+                      setTransferData({ ...transferData, amount: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowTransferModal(false);
+                      setShowCreateUserForm(false);
+                      setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Processing...' : 'Transfer'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={(e) => handleCreateUser(e, true)}>
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    value={newUserData.email}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, email: e.target.value })
+                    }
+                    required
+                    placeholder="user@example.com"
+                    autoFocus
+                  />
+                </div>
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input
+                    type="text"
+                    value={newUserData.first_name}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, first_name: e.target.value })
+                    }
+                    required
+                    placeholder="John"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input
+                    type="text"
+                    value={newUserData.last_name}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, last_name: e.target.value })
+                    }
+                    required
+                    placeholder="Doe"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone Number (Optional)</label>
+                  <input
+                    type="tel"
+                    value={newUserData.phone_number}
+                    onChange={(e) =>
+                      setNewUserData({ ...newUserData, phone_number: e.target.value })
+                    }
+                    placeholder="+1234567890"
+                  />
+                </div>
+                <div className="form-group" style={{ fontSize: '12px', color: '#666', marginTop: '-8px', marginBottom: '16px' }}>
+                  <p style={{ margin: 0 }}>
+                    Note: A username and temporary password will be auto-generated. The user can change their password after logging in.
+                  </p>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowCreateUserForm(false);
+                      setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+                    }}
+                  >
+                    Back
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Creating...' : 'Create User & Continue'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -587,6 +765,98 @@ const UserDashboard = () => {
                 </button>
                 <button type="submit" className="btn btn-danger" disabled={loading}>
                   {loading ? 'Processing...' : 'Withdraw'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddUserModal && (
+        <div className="modal-overlay" onClick={() => {
+          setShowAddUserModal(false);
+          setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+        }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add New User</h3>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setShowAddUserModal(false);
+                  setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={(e) => handleCreateUser(e, false)}>
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={newUserData.email}
+                  onChange={(e) =>
+                    setNewUserData({ ...newUserData, email: e.target.value })
+                  }
+                  required
+                  placeholder="user@example.com"
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label>First Name *</label>
+                <input
+                  type="text"
+                  value={newUserData.first_name}
+                  onChange={(e) =>
+                    setNewUserData({ ...newUserData, first_name: e.target.value })
+                  }
+                  required
+                  placeholder="John"
+                />
+              </div>
+              <div className="form-group">
+                <label>Last Name *</label>
+                <input
+                  type="text"
+                  value={newUserData.last_name}
+                  onChange={(e) =>
+                    setNewUserData({ ...newUserData, last_name: e.target.value })
+                  }
+                  required
+                  placeholder="Doe"
+                />
+              </div>
+              <div className="form-group">
+                <label>Phone Number (Optional)</label>
+                <input
+                  type="tel"
+                  value={newUserData.phone_number}
+                  onChange={(e) =>
+                    setNewUserData({ ...newUserData, phone_number: e.target.value })
+                  }
+                  placeholder="+1234567890"
+                />
+              </div>
+              <div className="form-group" style={{ fontSize: '12px', color: '#666', marginTop: '-8px', marginBottom: '16px' }}>
+                <p style={{ margin: 0 }}>
+                  Note: A username and temporary password will be auto-generated. The user can change their password after logging in.
+                </p>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowAddUserModal(false);
+                    setNewUserData({ email: '', first_name: '', last_name: '', phone_number: '' });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create User'}
                 </button>
               </div>
             </form>
